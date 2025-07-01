@@ -1,0 +1,12 @@
+{
+  "horas_diarias_objetivo": 8.0,
+  "tolerancia_atraso_minutos": 10,
+  "hora_entrada_padrao": "08:00",
+  "hora_saida_padrao": "17:00",
+  "intervalo_almoco_minimo": 30,
+  "max_horas_extras_dia": 3.0,
+  "min_intervalo_turnos": 11,
+  "dias_trabalho_semana": 5,
+  "turnos_rotativos": true,
+  "observacoes": "Regras específicas para setor de Produção - maior rigor na pontualidade"
+} 

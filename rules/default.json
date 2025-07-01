@@ -1,0 +1,11 @@
+{
+  "horas_diarias_objetivo": 8.0,
+  "tolerancia_atraso_minutos": 15,
+  "hora_entrada_padrao": "08:30",
+  "hora_saida_padrao": "17:30",
+  "intervalo_almoco_minimo": 30,
+  "max_horas_extras_dia": 2.0,
+  "min_intervalo_turnos": 11,
+  "dias_trabalho_semana": 5,
+  "observacoes": "Configuração padrão para análise de horas"
+} 
