@@ -1,9 +1,10 @@
 import pandas as pd
 import numpy as np
-from datetime import datetime
+from datetime import datetime, time
 import streamlit as st
 import csv
 import io
+import hashlib
 
 class CSVProcessor:
     def __init__(self):
@@ -16,6 +17,7 @@ class CSVProcessor:
             'Período : 01/04/2025 - 30/04/2025': 'Periodo',
             'Período : 01/05/2025 - 31/05/2025': 'Periodo',
             'Período : 01/06/2025 - 30/06/2025': 'Periodo',
+            'Período : 26/06/2025 - 24/07/2025': 'Periodo',
             'Objectivo': 'Obj',
             'Ausência': 'Aus'
         }
@@ -120,20 +122,11 @@ class CSVProcessor:
                         # Extrair todos os valores entre E1 e Justificação
                         time_values = values[e_start_idx:justif_idx]
                         
-                        # Filtrar apenas timestamps válidos (formato HH:MM)
+                        # Filtrar apenas timestamps válidos usando o método melhorado
                         for val in time_values:
-                            if val and val.strip() and ':' in str(val):
-                                clean_val = str(val).strip()
-                                # Verificar se é um timestamp válido
-                                if len(clean_val.split(':')) == 2:
-                                    try:
-                                        parts = clean_val.split(':')
-                                        hours = int(parts[0])
-                                        minutes = int(parts[1])
-                                        if 0 <= hours <= 23 and 0 <= minutes <= 59:
-                                            all_timestamps.append(clean_val)
-                                    except ValueError:
-                                        continue
+                            cleaned_timestamp = self._clean_and_validate_timestamp(val)
+                            if cleaned_timestamp:
+                                all_timestamps.append(cleaned_timestamp)
                         
                         # Limpar as colunas de tempo existentes (todas as possíveis)
                         for col in all_possible_time_columns:
@@ -142,6 +135,9 @@ class CSVProcessor:
                         
                         # Redistribuir os timestamps encontrados de forma inteligente
                         if all_timestamps and max_pairs > 0:
+                            # Validar sequência temporal antes de redistribuir
+                            temporal_validation = self._validate_time_sequence(all_timestamps)
+                            
                             # Caso especial: 4 timestamps = E1-S1-E2-S2 (padrão de trabalho normal)
                             if len(all_timestamps) == 4:
                                 daily_data['E1'] = all_timestamps[0]  # Entrada inicial
@@ -154,8 +150,8 @@ class CSVProcessor:
                                         daily_data[col] = '00:00'
                                 
                                 # Adicionar flag de validação
-                                daily_data['picagens_validas'] = True
-                                daily_data['aviso_picagens'] = ''
+                                daily_data['picagens_validas'] = temporal_validation['valida']
+                                daily_data['aviso_picagens'] = temporal_validation['mensagem']
                                 
                             # Caso especial: 6 timestamps = E1-S1-E2-S2-E3-S3
                             elif len(all_timestamps) == 6:
@@ -170,8 +166,8 @@ class CSVProcessor:
                                     if col in daily_data:
                                         daily_data[col] = '00:00'
                                 
-                                daily_data['picagens_validas'] = True
-                                daily_data['aviso_picagens'] = ''
+                                daily_data['picagens_validas'] = temporal_validation['valida']
+                                daily_data['aviso_picagens'] = temporal_validation['mensagem']
                                 
                             # Caso especial: 8 timestamps = E1-S1-E2-S2-E3-S3-E4-S4
                             elif len(all_timestamps) == 8:
@@ -180,8 +176,8 @@ class CSVProcessor:
                                     if col_name in daily_data:
                                         daily_data[col_name] = timestamp
                                 
-                                daily_data['picagens_validas'] = True
-                                daily_data['aviso_picagens'] = ''
+                                daily_data['picagens_validas'] = temporal_validation['valida']
+                                daily_data['aviso_picagens'] = temporal_validation['mensagem']
                                 
                             # Casos inválidos (número ímpar de picagens ou número inválido)
                             else:
@@ -200,6 +196,10 @@ class CSVProcessor:
                                 for i, timestamp in enumerate(all_timestamps):
                                     if i < len(available_pairs):
                                         daily_data[available_pairs[i]] = timestamp
+                        else:
+                            # Sem timestamps válidos encontrados ou max_pairs = 0
+                            daily_data['picagens_validas'] = False
+                            daily_data['aviso_picagens'] = '⚠️ Nenhuma picagem válida encontrada'
                     
                     # 6. Adicionar os dados diários ao registo principal
                     record.update(daily_data)
@@ -236,12 +236,132 @@ class CSVProcessor:
             st.error(f"Erro ao processar o ficheiro CSV: {e}")
             return pd.DataFrame()
 
+    def _clean_and_validate_timestamp(self, time_str):
+        """Limpa e valida um timestamp, retornando formato normalizado ou None."""
+        if not time_str or pd.isna(time_str):
+            return None
+        
+        time_str = str(time_str).strip()
+        if not time_str or time_str in ['nan', '', '00:00', '0:00']:
+            return None
+        
+        # Verificar se já está no formato HH:MM
+        if ':' in time_str:
+            try:
+                parts = time_str.split(':')
+                if len(parts) == 2:
+                    hours = int(parts[0])
+                    minutes = int(parts[1])
+                    
+                    # Validar limites realistas
+                    if 0 <= hours <= 23 and 0 <= minutes <= 59:
+                        return f"{hours:02d}:{minutes:02d}"
+                    else:
+                        return None  # Timestamp inválido
+            except ValueError:
+                return None
+        
+        # Tentar outros formatos (ex: 830 -> 8:30)
+        if time_str.isdigit() and len(time_str) in [3, 4]:
+            try:
+                if len(time_str) == 3:  # Ex: 830
+                    hours = int(time_str[0])
+                    minutes = int(time_str[1:3])
+                else:  # Ex: 1730
+                    hours = int(time_str[0:2])
+                    minutes = int(time_str[2:4])
+                
+                if 0 <= hours <= 23 and 0 <= minutes <= 59:
+                    return f"{hours:02d}:{minutes:02d}"
+            except ValueError:
+                pass
+        
+        return None
+
+    def _validate_time_sequence(self, timestamps):
+        """Valida se a sequência de timestamps está em ordem crescente."""
+        if len(timestamps) < 2:
+            return {'valida': True, 'mensagem': ''}
+        
+        try:
+            # Converter timestamps para minutos desde meia-noite para comparação
+            times_in_minutes = []
+            for ts in timestamps:
+                hours, minutes = map(int, ts.split(':'))
+                total_minutes = hours * 60 + minutes
+                times_in_minutes.append(total_minutes)
+            
+            # Verificar se está em ordem crescente
+            for i in range(1, len(times_in_minutes)):
+                if times_in_minutes[i] <= times_in_minutes[i-1]:
+                    return {
+                        'valida': False,
+                        'mensagem': f'⚠️ Sequência temporal inválida: {timestamps[i-1]} >= {timestamps[i]}'
+                    }
+            
+            # Validações adicionais específicas
+            warnings = []
+            
+            # Verificar se a primeira entrada é muito tarde (após 12:00)
+            if times_in_minutes[0] > 12 * 60:  # Após 12:00
+                warnings.append('Entrada muito tardia')
+            
+            # Verificar se há intervalos muito longos entre picagens
+            if len(times_in_minutes) >= 4:
+                # Intervalo de almoço (S1 to E2)
+                almoco_duration = times_in_minutes[2] - times_in_minutes[1]
+                if almoco_duration > 120:  # Mais de 2 horas
+                    warnings.append('Intervalo de almoço muito longo')
+                elif almoco_duration < 15:  # Menos de 15 minutos
+                    warnings.append('Intervalo de almoço muito curto')
+            
+            mensagem_final = '; '.join(warnings) if warnings else ''
+            
+            return {
+                'valida': True,
+                'mensagem': f'⚠️ {mensagem_final}' if mensagem_final else ''
+            }
+            
+        except (ValueError, IndexError):
+            return {
+                'valida': False,
+                'mensagem': '⚠️ Erro na validação temporal'
+            }
+
+    def _create_record_hash(self, record):
+        """Cria um hash único para um registo baseado em campos chave."""
+        # Usar Data + Numero + timestamps principais para criar hash
+        key_fields = [
+            str(record.get('Data', '')),
+            str(record.get('Numero', '')),
+            str(record.get('E1', '')),
+            str(record.get('S1', '')),
+            str(record.get('E2', '')),
+            str(record.get('S2', ''))
+        ]
+        
+        key_string = '|'.join(key_fields)
+        return hashlib.md5(key_string.encode()).hexdigest()
+
     def _clean_and_transform_data(self, df):
         """Limpa e transforma os dados do DataFrame."""
         try:
-            # 1. Remover duplicados
-            df = df.drop_duplicates()
-            df = df.reset_index(drop=True)
+            # 1. Melhor detecção de duplicados usando hash
+            if not df.empty:
+                # Criar hashes para detecção inteligente de duplicados
+                df['_record_hash'] = df.apply(
+                    lambda row: self._create_record_hash(row), axis=1
+                )
+                
+                # Contar duplicados antes da remoção
+                duplicates_count = df.duplicated(subset=['_record_hash']).sum()
+                if duplicates_count > 0:
+                    st.info(f"🔍 Removidos {duplicates_count} registos duplicados")
+                
+                # Remover duplicados baseado no hash
+                df = df.drop_duplicates(subset=['_record_hash'])
+                df = df.drop(columns=['_record_hash'])  # Remover coluna temporária
+                df = df.reset_index(drop=True)
             
             # 2. Limpar a coluna "Data"
             if 'Data' in df.columns:
@@ -249,6 +369,9 @@ class CSVProcessor:
                 df['Data'] = df['Data'].str.split(' ').str[0]
                 df['Data'] = pd.to_datetime(df['Data'], format='%d/%m/%Y', errors='coerce')
                 # Remover linhas com datas inválidas
+                invalid_dates = df['Data'].isna().sum()
+                if invalid_dates > 0:
+                    st.warning(f"⚠️ Removidas {invalid_dates} linhas com datas inválidas")
                 df = df.dropna(subset=['Data'])
             
             # 3. Converter coluna numérica
@@ -259,15 +382,28 @@ class CSVProcessor:
             final_columns = [col for col in self.ordered_columns if col in df.columns]
             df = df[final_columns]
             
-            # 5. Limpar colunas de tempo
+            # 5. Limpar colunas de tempo com validação melhorada
             time_cols = ['E1', 'S1', 'E2', 'S2', 'E3', 'S3', 'E4', 'S4', 'Efect', 'Extra', 'Falta']
             for col in time_cols:
                 if col in df.columns:
-                    df[col] = df[col].astype(str).replace('nan', '').str.strip()
-                    df[col] = df[col].replace('', '00:00')
+                    # Aplicar limpeza de timestamp a cada valor
+                    df[col] = df[col].apply(lambda x: self._clean_and_validate_timestamp(x) or '00:00')
             
-            # 6. Calcular períodos de trabalho
+            # 6. Converter tipos de dados corretos
+            if 'picagens_validas' in df.columns:
+                # Converter strings para booleanos
+                df['picagens_validas'] = df['picagens_validas'].apply(
+                    lambda x: x if isinstance(x, bool) else str(x).lower() in ['true', '1', 'yes']
+                )
+            
+            # 7. Calcular períodos de trabalho
             df = self._calculate_work_periods(df)
+            
+            # 8. Análise detalhada de intervalos (Fase 2)
+            df = self._analyze_detailed_intervals(df)
+            
+            # 9. Análise avançada de pontualidade (Fase 3)
+            df = self._analyze_advanced_punctuality(df)
             
             return df
             
@@ -345,6 +481,70 @@ class CSVProcessor:
                                              df.loc[index, 'intervalo_almoco'])
         
         return df
+
+    def _analyze_detailed_intervals(self, df, sector_rules=None):
+        """Aplica análise detalhada de intervalos usando o IntervalAnalyzer."""
+        try:
+            from .interval_analyzer import IntervalAnalyzer
+            
+            # Criar analisador com regras específicas ou padrão
+            analyzer = IntervalAnalyzer(sector_rules)
+            
+            # Aplicar análise
+            df = analyzer.analyze_intervals(df, sector_rules)
+            
+            return df
+            
+        except ImportError:
+            # Se não conseguir importar o módulo, apenas retorna o DataFrame original
+            return df
+        except Exception as e:
+            # Log do erro mas não interrompe o processamento
+            print(f"Aviso: Erro na análise de intervalos: {e}")
+            return df
+    
+    def apply_sector_rules(self, df, sector="default"):
+        """Aplica regras específicas do setor aos dados processados."""
+        try:
+            from .rules_engine import RulesEngine
+            
+            rules_engine = RulesEngine()
+            sector_rules = rules_engine.get_rules(sector)
+            
+            # Reaplicar análise de intervalos com regras do setor
+            df = self._analyze_detailed_intervals(df, sector_rules)
+            
+            # Reaplicar análise de pontualidade com regras do setor
+            df = self._analyze_advanced_punctuality(df, sector_rules)
+            
+            return df
+            
+        except ImportError:
+            return df
+        except Exception as e:
+            print(f"Aviso: Erro ao aplicar regras do setor {sector}: {e}")
+            return df
+    
+    def _analyze_advanced_punctuality(self, df, sector_rules=None):
+        """Aplica análise avançada de pontualidade usando o PunctualityAnalyzer."""
+        try:
+            from .punctuality_analyzer import PunctualityAnalyzer
+            
+            # Criar analisador com regras específicas ou padrão
+            analyzer = PunctualityAnalyzer(sector_rules)
+            
+            # Aplicar análise de pontualidade
+            df = analyzer.analyze_punctuality_issues(df, sector_rules)
+            
+            return df
+            
+        except ImportError:
+            # Se não conseguir importar o módulo, apenas retorna o DataFrame original
+            return df
+        except Exception as e:
+            # Log do erro mas não interrompe o processamento
+            print(f"Aviso: Erro na análise de pontualidade: {e}")
+            return df
 
     def _time_to_timedelta(self, time_str):
         """Converte uma string de tempo (HH:MM) para um objeto Timedelta."""

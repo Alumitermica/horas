@@ -23,7 +23,11 @@ class RulesEngine:
                 "hora_saida_padrao": "17:00",
                 "intervalo_almoco_minimo": 30,
                 "max_horas_extras_dia": 3.0,
-                "turnos_rotativos": True
+                "turnos_rotativos": True,
+                # Novas regras para análise de intervalos (Fase 2)
+                "alerta_almoco_curto": 25,
+                "alerta_almoco_longo": 75,
+                "alerta_pausa_longa": 15
             },
             "Administrativo": {
                 "horas_diarias_objetivo": 8.0,
@@ -32,7 +36,11 @@ class RulesEngine:
                 "hora_saida_padrao": "18:00",
                 "intervalo_almoco_minimo": 60,
                 "max_horas_extras_dia": 2.0,
-                "horario_flexivel": True
+                "horario_flexivel": True,
+                # Regras mais relaxadas para administrativo
+                "alerta_almoco_curto": 45,
+                "alerta_almoco_longo": 120,
+                "alerta_pausa_longa": 25
             },
             "Vendas": {
                 "horas_diarias_objetivo": 8.0,

@@ -1,0 +1,87 @@
+{
+  "horarios_setor": {
+    "Produção": {
+      "entrada_padrao": "08:30",
+      "saida_padrao": "17:30",
+      "almoco_inicio": "13:00",
+      "almoco_duracao": 60,
+      "intervalo_manha": 15,
+      "intervalo_tarde": 15,
+      "tolerancia_entrada": 10,
+      "tolerancia_saida": 15,
+      "tolerancia_esquecimento": 30,
+      "tolerancia_intervalo": 5,
+      "picagens_esperadas": 4,
+      "dias_trabalho": [
+        "segunda",
+        "terça",
+        "quarta",
+        "quinta",
+        "sexta"
+      ]
+    },
+    "Administrativo": {
+      "entrada_padrao": "09:00",
+      "saida_padrao": "18:00",
+      "almoco_inicio": "12:30",
+      "almoco_duracao": 60,
+      "tolerancia_entrada": 15,
+      "tolerancia_saida": 20,
+      "tolerancia_esquecimento": 45,
+      "dias_trabalho": [
+        "segunda",
+        "terça",
+        "quarta",
+        "quinta",
+        "sexta"
+      ]
+    },
+    "Vendas": {
+      "entrada_padrao": "09:00",
+      "saida_padrao": "18:00",
+      "almoco_inicio": "13:00",
+      "almoco_duracao": 45,
+      "tolerancia_entrada": 30,
+      "tolerancia_saida": 30,
+      "tolerancia_esquecimento": 60,
+      "dias_trabalho": [
+        "segunda",
+        "terça",
+        "quarta",
+        "quinta",
+        "sexta",
+        "sábado"
+      ]
+    },
+    "Logística": {
+      "entrada_padrao": "07:00",
+      "saida_padrao": "16:00",
+      "almoco_inicio": "11:30",
+      "almoco_duracao": 30,
+      "tolerancia_entrada": 5,
+      "tolerancia_saida": 10,
+      "tolerancia_esquecimento": 20,
+      "dias_trabalho": [
+        "segunda",
+        "terça",
+        "quarta",
+        "quinta",
+        "sexta",
+        "sábado"
+      ]
+    }
+  },
+  "perfis_funcionario": {},
+  "tipos_dia_sem_picagem": [
+    "folga",
+    "férias",
+    "feriado",
+    "ausência",
+    "baixa médica"
+  ],
+  "algoritmos_detecao": {
+    "esquecimento_vs_atraso": true,
+    "sugerir_correcoes_automaticas": true,
+    "confianca_minima_sugestao": 0.7
+  }
+}
